@@ -1,4 +1,4 @@
-README for simplesql
+OVERVIEW
 
 This is a Bash script.
 The purpose, like most programs, is to support my lazyness.
@@ -15,6 +15,20 @@ that I have put here as well.
 The easiest way to learn the use of the script is to just launch 
 it with -h for help. This will print out the usage portion of 
 the script.
+
+FEATURES
+	create a dump with --skip-extended-insert so I can read/modify the rows
+	restore one of those dumps.
+	create a Drupal dump (sans watchdog, sessions, and caches)
+	copy a database from one DB to another
+	Clone (copy with create) a database to a New database
+	Run an arbitrary command 
+	Run a series of commands from a file
+	export CSV copies of a specified table
+	edit - enter mysql CLI 
+	Show a list of tables in a database
+	Display 'top' like statistics (requires mytop)
+	Batch alter of all admin passwords for Drupal databases
 
 LOCATION
 
