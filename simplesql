@@ -1,0 +1,419 @@
+#!/bin/bash
+
+set -o errexit
+set -o nounset
+
+# For this script to run properly, you must fill out all the required information.
+# If you are lazy like me, you can run a file named simplesql.conf to initialize
+# certain defaults and aliases.
+#
+# the format of this file should be as follows.
+
+#> #!/bin/bash
+#> 
+#> # Setup Defaults
+#> 
+#> i=0
+#> # Set up in the hostA variable the always working address to the server, followed by any aliases you like.
+#> # all delimited by commas.
+#> hostA[$i]="sql01.domain.com,sql01"
+#> userA[$i]="root";										# Put the user for this server here
+#> passwdA[$i]="<password here>";					# Put the password for this server here (usually for root)
+#> DBNameA[$((i++))]="test";							# If you want a default database to end up in, this is the place.
+#> 
+#> hostA[$i]="sql02.domain.com,sql02,x9sql02"
+#> userA[$i]="root"
+#> passwdA[$i]="<password here>"
+#> DBNameA[$((i++))]="test"
+#> 
+#> tempfile=`tempfile`
+#> tfile2=`tempfile`
+#> 
+#> mode="edit"
+#> host="sql01.doamain.com"
+#> passwd=""
+#> user="root"
+#> DBName=""
+
+[ -f simplesql.conf ] && source simplesql.conf
+
+##########################################################
+# Create the Usage variable to display if they need help #
+##########################################################
+usage=`cat <<EOF
+	Usage:\n\n
+
+	$0 [ -h ] [ -d <database> ] [ -f <filename> ] [ -m <mode> ] [ -n <new database> ] [ -p <password> ] [ -s <quoted script> ] [ -u <user> ]\n\n
+
+	$(tput setaf 5)-h:$(tput setaf 9) Provide this usage page.\n\n
+
+	$(tput setaf 5)-a <current Drupal admin password>:$(tput setaf 9) This is the current Drupal admin password. If this doesn\'t match, we don\'t run\n\n
+
+	$(tput setaf 5)-b <new Drupal admin password>:$(tput setaf 9) This is the new, replacement Drupal admin password. see -a for trigger\n\n
+
+	$(tput setaf 5)-d <database>:$(tput setaf 9) Enter the name of the database that you are operating against.\n\n
+
+	$(tput setaf 5)-f <filename>:$(tput setaf 9) This is a script file with multiple semi-colon terminated mysql commands.\n\n
+
+	$(tput setaf 5)-m <mode>:$(tput setaf 9) This defines the different modes that this script can operate in.\n
+		dump - Dump the named database to a file with the name of the database.dump.\n
+		import - Run the database.dump file created by the dump command above. This is a restore and not a merge.\n
+		copy - Copy a database into another existing database name.\n
+				This will NOT recreate the new database. It will clear\n
+				any existing tables. It will add any new tables.\n
+		clone - Copy a database into a new database.\n
+		run - run the script provided on the command line by -s <quoted script>.\n
+		runfile - run the script command(s) provided in the file named by -f <filename>.\n
+		export - create a CSV file output from the dabase.\n
+		edit - Go into command line mode of mysql.\n
+		show - Show a list of tables for the database.\n
+		stats - launch mytop if it is available\n\n
+		alter - Alter ALL Drupal admin passwords
+
+	$(tput setaf 5)-n <new database>:$(tput setaf 9) The name of the new database for copy or clone.\n\n
+
+	$(tput setaf 5)-o <host>:$(tput setaf 9) The host server where the database exists.\n\n
+
+	$(tput setaf 5)-p <password>:$(tput setaf 9) The password needed by the user (-u) to access the database.\n\n
+
+	$(tput setaf 5)-s <quoted script>:$(tput setaf 9) This is a quoted string that is a mysql command script.\n\n
+
+	$(tput setaf 5)-t <table name>:$(tput setaf 9) This is the table that you want to export.\n\n
+
+	$(tput setaf 5)-u <user>:$(tput setaf 9) The username that has access to the database.\n\n
+
+	$(tput setaf 5)-x <CSV export file>:$(tput setaf 9) The output filename you want your CSV export to end up in.\n\n
+
+EOF`
+
+################################################
+# Accept and parse all the incoming parameters #
+################################################
+while getopts ":hm:a:b:d:n:o:p:s:t:u:f:x:" options ; do
+	case $options in
+		m ) mode=$OPTARG;;
+		a ) DrupO=$OPTARG;;
+		b ) DrupN=$OPTARG;;
+		d ) DBName=$OPTARG;;
+		n ) DBNameNew=$OPTARG;;
+		o ) host=$OPTARG;;
+		p ) passwd=$OPTARG;;
+		s ) script=$OPTARG;;
+		t ) table=$OPTARG;;
+		u ) user=$OPTARG;;
+		f ) filename=$OPTARG;;
+		x ) xport=$OPTARG;;
+		h ) mode="help";;
+	esac
+done
+
+###############################################
+# Based on the 'host' variable, check aliases #
+# and select the host. If the passwd, user,   #
+# or DBName variables were not passed in,     #
+# then set them to known defaults.            #
+###############################################
+for (( i=0; i<$((${#hostA[@]})); i=i+1 )); do
+	# echo ${alias[i]}
+
+	# echo -n "$a :: "
+	set -- `echo ${hostA[i]} | tr , \ `
+	temp=$1
+	while [ ${#1} -gt 0 ]; do
+		if [ $1 == $host ]; then
+			host=$temp
+			if [[ ! $passwd ]];then
+				passwd=${passwdA[i]}
+			fi
+			if [[ ! $user ]];then
+				user=${userA[i]}
+			fi
+			if [[ ! $DBName ]];then
+				DBName=${DBNameA[i]}
+			fi
+		fi
+		shift
+	done
+done
+
+################################################
+# Based on the mode given, execute the command #
+################################################
+case $mode in
+	########################################################
+	# Do a mysqldump of a specific database                #
+	# Normally, if I do the dump, it is because            #
+	# I want to look at it. So, the --skip-extended-insert #
+	# option so I can actually read the records            #
+	#                                                      #
+	# Required parameters:                                 #
+	#	host - what server are we on?                       #
+	#	user - what user do we use to access our DB         #
+	#	passwd - The password needed                        #
+	#	DBName - The database we need a dump of             #
+	########################################################
+	"dump" )  # Dump a copy of the database into $DBName.dump
+		mysqldump --skip-extended-insert -h $host -u $user -p$passwd $DBName > $DBName.dump
+		;;
+
+	################################################
+	# Show a list of a the tables in the Database  #
+	#                                              #
+	# Required parameters:                         #
+	#	host - what server are we on?               #
+	#	user - what user do we use to access our DB #
+	#	passwd - The password needed                #
+	#	DBName - The database we need a dump of     #
+	################################################
+	"show" )  # Show a list of tables in the $DBName database
+		mysqlshow -h $host -u $user -p$passwd $DBName 
+		;;
+
+	#######################################################
+	# Do a Drupal Dump... This is for a Drupal database   #
+	# It is meant to dump all the data, but to leave      #
+	# behind any cache, session, or watchdog information. #
+	# The purpose here is to keep the size of the backup  #
+	# WAY down....                                        #
+	#                                                     #
+	# Required parameters:                                #
+	#	host - what server are we on?                      #
+	#	user - what user do we use to access our DB        #
+	#	passwd - The password needed                       #
+	#	DBName - The database we need a dump of            #
+	#######################################################
+	"dumpdrupal" )  
+		mysqlshow -h $host -u $user -p$passwd $DBName > $tempfile
+		# cat $tempfile | sed -e 's/|//g' | grep -v ^+ | sed -e '1d' | sed -e '1d' | sed -e 's/^ //' | grep -v "watchdog\|sessions\|cache\|cache_[a-z]*"
+		rm -f ${DBName}.drupal.dump
+		for t in `cat $tempfile | sed -e 's/|//g' | grep -v ^+ | sed -e '1d' | sed -e '1d' | sed -e 's/^ //' | grep -v "watchdog\|sessions\|^cache\|^cache_[a-z]*"`; do
+			mysqldump --skip-extended-insert -h $host -u $user -p$passwd $DBName $t >> ${DBName}.drupal.dump
+		done
+		;;
+
+	#######################################################
+	# Restore a .dump file that has been created by the   #
+	# 'dump' command defined above.                       #
+	# behind any cache, session, or watchdog information. #
+	# The purpose here is to keep the size of the backup  #
+	# WAY down....                                        #
+	#                                                     #
+	# Required parameters:                                #
+	#	host - what server are we on?                      #
+	#	user - what user do we use to access our 'New' DB  #
+	#	passwd - The password needed for the 'New' DB      #
+	#	DBName - The database we have a dump of            #
+	#	DBNameNew - The database we are restoring to       #
+	#######################################################
+	"import" )	#Import from the .dump file into a database
+		echo Importing into $DBNameNew 
+		mysql -h $host -u $user -p$passwd $DBNameNew < $DBName.dump
+		;;
+
+	#######################################################
+	# This is a combination of the 'dump' command and the #
+	# 'import' command. The is a small issue here in that #
+	# the host, user, & password must be the same for     #
+	# both databases. Both Databases must ALREADY exist.  #
+	#                                                     #
+	# Required parameters:                                #
+	#	host - what server are we on?                      #
+	#	user - what user do we use to access both DB's     #
+	#	passwd - The password needed for both DB's         #
+	#	DBName - The source database                       #
+	#	DBNameNew - The destination database               #
+	#######################################################
+	"copy" )			# Make a copy of a database into an existing one.
+		echo "Dumpfile file to $tempfile"
+		mysqldump -h $host -u $user -p$passwd $DBName > $tempfile
+		echo "Importing $tempfile to $DBNameNew"
+		mysql -h $host -u $user -p$passwd $DBNameNew < $tempfile
+		echo "Done! $tempfile still available in case you screwed up!"
+		;;
+
+	#######################################################
+	# This routine will make a backup of a database and   #
+	# then CREATE a NEW database to restore the backup    #
+	# to. Again, the hosts, user, & password must be the  #
+	# same for both databases.                            #
+   #                                                     #
+	# Required parameters:                                #
+	#	host - what server are we on?                      #
+	#	user - what user do we use to access both DB's     #
+	#	passwd - The password needed for both DB's         #
+	#	DBName - The source database                       #
+	#	DBNameNew - The destination database               #
+	#######################################################
+	"clone" ) 		# Make a clone of a database into a new one.
+		echo "Dumpfile file to $tempfile"
+		mysqldump -h $host -u $user -p$passwd $DBName > $tempfile
+		echo "Creating the new database $DBNameNew"
+		cat <<EOF > $tfile2
+create database if not exists $DBNameNew;
+quit
+EOF
+		mysql -h $host -u $user -p$passwd < $tfile2
+		rm -f $tfile2
+		echo "Importing $tempfile to $DBNameNew"
+		mysql -h $host -u $user -p$passwd $DBNameNew < $tempfile
+		echo "Done! $tempfile still available in case you screwed up!"
+		;;
+
+	#######################################################
+	# This will allow for an arbitrary mysql command to   #
+	# run. It is run agains the database. If you want to  #
+	# string multiple command together, use ';' between   #
+	# each command.                                       #
+   #                                                     #
+	# Required parameters:                                #
+	#	host - what server are we on?                      #
+	#	user - what user do we use to access both DB's     #
+	#	passwd - The password needed for both DB's         #
+	#	DBName - The source database                       #
+	#######################################################
+	"run" )			# Run a quote enclosed script against a database
+		cat <<EOF > $tempfile
+$script;
+quit
+EOF
+		mysql -h $host -u $user -p$passwd $DBName <$tempfile
+		;;
+
+	#######################################################
+	# This will allow for an arbitrary set of mysql       #
+	# commands to be run. Build a file with each command  #
+	# on a separate line. Terminate each line with ';'    #
+   #                                                     #
+	# Required parameters:                                #
+	#	host - what server are we on?                      #
+	#	user - what user do we use to access both DB's     #
+	#	passwd - The password needed for both DB's         #
+	#	DBName - The source database                       #
+	#	filename - The name of the script file             #
+	#######################################################
+	"runfile" )		# Run a script file against a database
+		echo Running script on $DBName
+		mysql -h $host -u $user -p$passwd $DBName < $filename
+		;;
+
+	#######################################################
+	# This provides you with Command Line Interface into  #
+	# mysql.                                              #
+   #                                                     #
+	# Required parameters:                                #
+	#	host - what server are we on?                      #
+	#	user - what user do we use to access both DB's     #
+	#	passwd - The password needed for both DB's         #
+	#	DBName - The source database                       #
+	#######################################################
+	"edit" )	# Go into raw mysql mode on a database
+		# echo "Host: $host - User: $user - Password: $passwd - DB: $DBName"
+	   echo "SQL CLI on $host for User $user using Password $passwd in DB $DBName"
+		mysql -h $host -u $user -p$passwd $DBName
+		;;
+
+	#######################################################
+	# Export a table in the database in a CSV format.     #
+   #                                                     #
+	# Required parameters:                                #
+	#	host - what server are we on?                      #
+	#	user - what user do we use to access both DB's     #
+	#	passwd - The password needed for both DB's         #
+	#	DBName - The source database                       #
+	#	table - The source tablename                       #
+	#	xport - The name of the output file in CSV format  #
+	#######################################################
+	"export" ) #Export into CSV format
+		#SELECT * INTO OUTFILE '/somefile.csv' 
+		#FIELDS ESCAPED BY '\' 
+		#FIELDS OPTIONALLY ENCLOSED BY '"'
+		#FIELDS TERMINATED BY ',' 
+		#LINES TERMINATED BY '\n' 
+		#FROM table WHERE column='value'";
+		echo Running CSV export on Database: $DBName and Table: $table
+		cat <<EOF > $tfile2
+SELECT * INTO OUTFILE '$xport' 
+FIELDS ESCAPED BY '\' 
+OPTIONALLY ENCLOSED BY '"'
+TERMINATED BY ',' 
+LINES TERMINATED BY '\n' 
+FROM $table";
+quit
+EOF
+		mysql -h $host -u $user -p$passwd $DBName <$tfile2 >$xport
+		;;
+
+	#######################################################
+	# Provide a 'top' like statistics for your mysql      #
+   # server.                                             #
+   #                                                     #
+	# Required parameters:                                #
+	#	host - what server are we on?                      #
+	#	user - what user do we use to access both DB's     #
+	#	passwd - The password needed for both DB's         #
+   #                                                     #
+   # You must have the mytop package installed for this  #
+   # to work.                                            #
+	#######################################################
+	"stats" )
+		set +o errexit
+		which mytop > /dev/null 2>&1
+		rc=$?
+		if [ $rc -eq 0 ]; then
+			mytop -u $user -p $passwd -h $host -s 3
+		else
+			echo -e $usage
+			cat <<EOF
+
+$(tput setaf 1)ERROR:$(tput setaf 9)
+
+You have attempted run the statistics portion of this script.
+It is a requirement of this that you have available the 'mytop' package.
+
+To Install on various platforms
+===============================
+GENTOO: emerge -avt mytop
+
+EOF
+		fi
+		set -o errexit
+		;;
+
+	#######################################################
+	# Alters ALL admin password within all drupal DBs     #
+   # on a specified server. You must provide the old     #
+	# and new admin passwords. If the old password does   #
+	# not match what is currently in the database, it is  #
+	# assumed that the password is NOT TO BE CHANGED.     #
+   #                                                     #
+	# Required parameters:                                #
+	#	host - what server are we on?                      #
+	#	user - what user do we use to access both DB's     #
+	#	passwd - The password needed for both DB's         #
+	#  DrupO - The current drupal admin (user 1) password #
+	#  DrupN - The new drupal admin (user 1) password     #
+	#######################################################
+	"alter" )
+		[ ${DrupO:=fred} = "fred" ] && echo "Error :: you must provide the old Drupal Admin password (-a)" && exit 1
+		[ ${DrupN:=fred} = "fred" ] && echo "Error :: you must provide the new Drupal Admin password (-b)" && exit 1
+		dblist=`mysql -h $host -u $user -p$passwd -Bs -e "select table_schema from tables where table_name = 'node'" information_schema`
+		/bin/rm -f $tempfile
+		for d in $dblist; do
+			mysql -h $host -u $user -p$passwd -Bs -e "select \"$d\" from users where uid = 1 and pass = md5('$DrupO')" $d  >> $tempfile
+		done
+		for d in `cat $tempfile`; do
+			mysql -h $host -u $user -p$passwd -Bs -e "select \"$d - old:\", name, pass from users where uid = 1 and pass = md5('$DrupO')" $d 
+			mysql -h $host -u $user -p$passwd -Bs -e "update users set pass = md5('$DrupN') where uid = 1 and pass = md5('$DrupO')" $d 
+			mysql -h $host -u $user -p$passwd -Bs -e "select \"$d - new:\", name, pass from users where uid = 1 and pass = md5('$DrupN')" $d 
+			echo -----
+		done
+		;;
+
+	#######################################################
+	# Well, you didn't chose anything, and no default was #
+	# supplied, so here is the usage description          #
+	#######################################################
+	* ) 				# user error... show the usage page.
+		echo -e $usage
+		;;
+esac
