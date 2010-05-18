@@ -1,0 +1,35 @@
+README for simplesql
+
+This is a Bash script.
+The purpose, like most programs, is to support my lazyness.
+
+By creating the $usage portion, it reminded me what parameters
+I needed to get a particular job done. 
+
+Also, I have used a variety of mysql commands to accomplish things.
+
+And as time went on, I found a need to do some special things for
+our Drupal databases. So, there are some Drupal specific features
+that I have put here as well.
+
+The easiest way to learn the use of the script is to just launch 
+it with -h for help. This will print out the usage portion of 
+the script.
+
+LOCATION
+
+I normally would put this in my ~/bin directory and set it to be executable.
+
+SUPPORTING FILE
+
+This script is as I said, for my lazyness. If you supply a file named
+simplesql.conf, you can place default values there.
+
+I use it to support about 30 different mysql servers. Each with hundreds of
+databases. Many of them are Drupal databases, so that explains the extra
+features that are Drupal specific.
+
+The struction fo the 'simplesql.conf' file is documented at the front
+of the simplesql script.
+
+
