@@ -47,7 +47,7 @@ usage=`cat <<EOF
 
 	$(tput setaf 5)-h:$(tput setaf 9) Provide this usage page.\n\n
 
-	$(tput setaf 5)-a <current Drupal admin password>:$(tput setaf 9) This is the current Drupal admin password. If this doesn\'t match, we don\'t run\n\n
+	$(tput setaf 5)-a <current Drupal admin password>:$(tput setaf 9) This is the current Drupal admin password. If this doesn't match, we don't run\n\n
 
 	$(tput setaf 5)-b <new Drupal admin password>:$(tput setaf 9) This is the new, replacement Drupal admin password. see -a for trigger\n\n
 
@@ -182,12 +182,22 @@ case $mode in
 	#	passwd - The password needed                       #
 	#	DBName - The database we need a dump of            #
 	#######################################################
+	### TODO
+	# * This needs to be added to the usage section
+	#
 	"dumpdrupal" )  
-		mysqlshow -h $host -u $user -p$passwd $DBName > $tempfile
-		# cat $tempfile | sed -e 's/|//g' | grep -v ^+ | sed -e '1d' | sed -e '1d' | sed -e 's/^ //' | grep -v "watchdog\|sessions\|cache\|cache_[a-z]*"
+		mysql -h $host -u $user -p$passwd  $DBName -Bs -e "show tables" > $tempfile
+
 		rm -f ${DBName}.drupal.dump
-		for t in `cat $tempfile | sed -e 's/|//g' | grep -v ^+ | sed -e '1d' | sed -e '1d' | sed -e 's/^ //' | grep -v "watchdog\|sessions\|^cache\|^cache_[a-z]*"`; do
-			mysqldump --skip-extended-insert -h $host -u $user -p$passwd $DBName $t >> ${DBName}.drupal.dump
+		for t in `cat $tempfile`; do
+			case $t in
+				watchdog|sessions|cache|cache_[a-z]*)
+					mysqldump --no-data -h $host -u $user -p$passwd $DBName $t >> ${DBName}.drupal.dump
+					;;
+				* )
+					mysqldump --skip-extended-insert -h $host -u $user -p$passwd $DBName $t >> ${DBName}.drupal.dump
+					;;
+			esac
 		done
 		;;
 
