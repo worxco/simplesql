@@ -56,19 +56,22 @@ usage=`cat <<EOF
 	$(tput setaf 5)-f <filename>:$(tput setaf 9) This is a script file with multiple semi-colon terminated mysql commands.\n\n
 
 	$(tput setaf 5)-m <mode>:$(tput setaf 9) This defines the different modes that this script can operate in.\n
-		dump - Dump the named database to a file with the name of the database.dump.\n
-		import - Run the database.dump file created by the dump command above. This is a restore and not a merge.\n
-		copy - Copy a database into another existing database name.\n
-				This will NOT recreate the new database. It will clear\n
-				any existing tables. It will add any new tables.\n
-		clone - Copy a database into a new database.\n
-		run - run the script provided on the command line by -s <quoted script>.\n
-		runfile - run the script command(s) provided in the file named by -f <filename>.\n
-		export - create a CSV file output from the dabase.\n
-		edit - Go into command line mode of mysql.\n
-		show - Show a list of tables for the database.\n
-		stats - launch mytop if it is available\n\n
-		alter - Alter ALL Drupal admin passwords
+		\tdump - Dump the named database to a file with the name of the database.dump.\n
+		\timport - Run the database.dump file created by the dump command above. This is a restore and not a merge.\n
+		\tdumpdrupal - Dump the named database to a file with the name of the database.drupal.dump.\n
+			\t\tThe purpose of this variant is to only get the structure for cache, session, & watchdog tables.\n
+			\t\tAlong with all the data from the rest of the tables.\n
+		\tcopy - Copy a database into another existing database name.\n
+				\t\tThis will NOT recreate the new database. It will clear\n
+				\t\tany existing tables. It will add any new tables.\n
+		\tclone - Copy a database into a new database.\n
+		\trun - run the script provided on the command line by -s <quoted script>.\n
+		\trunfile - run the script command(s) provided in the file named by -f <filename>.\n
+		\texport - create a CSV file output from the dabase.\n
+		\tedit - Go into command line mode of mysql.\n
+		\tshow - Show a list of tables for the database.\n
+		\tstats - launch mytop if it is available\n\n
+		\talter - Alter ALL Drupal admin passwords
 
 	$(tput setaf 5)-n <new database>:$(tput setaf 9) The name of the new database for copy or clone.\n\n
 
@@ -182,9 +185,6 @@ case $mode in
 	#	passwd - The password needed                       #
 	#	DBName - The database we need a dump of            #
 	#######################################################
-	### TODO
-	# * This needs to be added to the usage section
-	#
 	"dumpdrupal" )  
 		mysql -h $host -u $user -p$passwd  $DBName -Bs -e "show tables" > $tempfile
 
