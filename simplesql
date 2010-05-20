@@ -1,5 +1,23 @@
 #!/bin/bash
 
+# 	Program: simpelsql
+#	Description: This is an aggregation of mysql based commands. Most often used when working with the Drupal Database.
+#	Author: Kurt L Vanderwater
+#	  Copyright (C) 2007-2010 Meridian Data Systems, Inc.
+#
+#   This program is free software: you can redistribute it and/or modify
+#   it under the terms of the GNU General Public License as published by
+#   the Free Software Foundation, either version 3 of the License, or
+#   (at your option) any later version.
+#
+#   This program is distributed in the hope that it will be useful,
+#   but WITHOUT ANY WARRANTY; without even the implied warranty of
+#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#   GNU General Public License for more details.
+#
+#   You should have received a copy of the GNU General Public License
+#   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 set -o errexit
 set -o nounset
 
@@ -41,6 +59,11 @@ set -o nounset
 # Create the Usage variable to display if they need help #
 ##########################################################
 usage=`cat <<EOF
+	simplesql Copyright (C) 2007-2010 Meridian Data Systems, Inc.\n
+    This program comes with ABSOLUTELY NO WARRANTY; for details read the source.\n
+    This is free software, and you are welcome to redistribute it\n
+    under certain conditions; See the included license.\n\n
+
 	Usage:\n\n
 
 	$0 [ -h ] [ -d <database> ] [ -f <filename> ] [ -m <mode> ] [ -n <new database> ] [ -p <password> ] [ -s <quoted script> ] [ -u <user> ]\n\n
