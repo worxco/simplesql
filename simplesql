@@ -53,6 +53,8 @@ set -o nounset
 #> user="root"
 #> DBName=""
 
+[ -f /etc/simplesql.conf ] && source ~/etc/simplesql.conf
+[ -f ~/bin/simplesql.conf ] && source ~/bin/simplesql.conf
 [ -f simplesql.conf ] && source simplesql.conf
 
 ##########################################################
@@ -179,7 +181,23 @@ case $mode in
 	#	DBName - The database we need a dump of             #
 	########################################################
 	"dump" )  # Dump a copy of the database into $DBName.dump
+		echo "mysqldump --skip-extended-insert -h $host -u $user -p$passwd $DBName > $DBName.dump"
 		mysqldump --skip-extended-insert -h $host -u $user -p$passwd $DBName > $DBName.dump
+		;;
+
+	########################################################
+	# Do a mysqldump of a specific database just for the   #
+	# structure.                                           #
+	#                                                      #
+	# Required parameters:                                 #
+	#	host - what server are we on?                       #
+	#	user - what user do we use to access our DB         #
+	#	passwd - The password needed                        #
+	#	DBName - The database we need a dump of             #
+	########################################################
+	"dumpmeta" )  # Dump a copy of the metadata about the database into $DBName.meta
+		echo "mysqldump --no-data -h $host -u $user -p$passwd $DBName > $DBName.meta"
+		mysqldump --no-data -h $host -u $user -p$passwd $DBName > $DBName.meta
 		;;
 
 	################################################
