@@ -57,6 +57,10 @@ set -o nounset
 [ -f ~/bin/simplesql.conf ] && source ~/bin/simplesql.conf
 [ -f simplesql.conf ] && source simplesql.conf
 
+tempfile=`tempfile`
+tfile2=`tempfile`
+tfile3=`tempfile`
+
 ##########################################################
 # Create the Usage variable to display if they need help #
 ##########################################################
@@ -80,12 +84,15 @@ usage=`cat <<EOF
 
 	$(tput setaf 5)-f <filename>:$(tput setaf 9) This is a script file with multiple semi-colon terminated mysql commands.\n\n
 
+	$(tput setaf 5)-i <findstr>:$(tput setaf 9) This is a string that you wish to search for.\n\n
+
 	$(tput setaf 5)-m <mode>:$(tput setaf 9) This defines the different modes that this script can operate in.\n
 		\tdump - Dump the named database to a file with the name of the database.dump.\n
 		\timport - Run the database.dump file created by the dump command above. This is a restore and not a merge.\n
 		\tdumpdrupal - Dump the named database to a file with the name of the database.drupal.dump.\n
 			\t\tThe purpose of this variant is to only get the structure for cache, session, & watchdog tables.\n
 			\t\tAlong with all the data from the rest of the tables.\n
+		\tdrupalfind - Search a given Drupal database for all occurances of a string.\n
 		\tcopy - Copy a database into another existing database name.\n
 				\t\tThis will NOT recreate the new database. It will clear\n
 				\t\tany existing tables. It will add any new tables.\n
@@ -117,7 +124,7 @@ EOF`
 ################################################
 # Accept and parse all the incoming parameters #
 ################################################
-while getopts ":hm:a:b:d:n:o:p:s:t:u:f:x:" options ; do
+while getopts ":hm:a:b:d:n:o:p:s:t:u:f:i:x:" options ; do
 	case $options in
 		m ) mode=$OPTARG;;
 		a ) DrupO=$OPTARG;;
@@ -131,6 +138,7 @@ while getopts ":hm:a:b:d:n:o:p:s:t:u:f:x:" options ; do
 		u ) user=$OPTARG;;
 		f ) filename=$OPTARG;;
 		x ) xport=$OPTARG;;
+		i ) findstr=$OPTARG;;
 		h ) mode="help";;
 	esac
 done
@@ -240,6 +248,45 @@ case $mode in
 					;;
 			esac
 		done
+		;;
+
+	#######################################################
+	# Do a Drupal Find... This is for a Drupal database   #
+	# It is meant to search through all the tables to     #
+	# all occurances of a string. It ignores the cache    #
+	# tables along with the sessions and watchdog.        #
+	#                                                     #
+	# Required parameters:                                #
+	#	host - what server are we on?                      #
+	#	user - what user do we use to access our DB        #
+	#	passwd - The password needed                       #
+	#	DBName - The database we need a dump of            #
+	#	findstr - The string you want to search for        #
+	#######################################################
+	"drupalfind" )  
+		echo "Running drupalfind -- Searching for $findstr"
+		echo "Output written to: $tfile3"
+		mysql -h $host -u $user -p$passwd  $DBName -Bs -e "show tables" > $tempfile
+
+		rm -f ${DBName}.drupal.dump
+		for t in `cat $tempfile`; do
+			case $t in
+				watchdog|sessions|cache|cache_[a-z]*)
+					;;
+				* )
+					set +o errexit
+					mysqldump --skip-extended-insert -h $host -u $user -p$passwd $DBName $t | grep "$findstr" > $tfile2
+					set -o errexit
+					;;
+			esac
+			if [ -s $tfile2 ]; then
+				echo "=================" >> $tfile3
+				echo $t >> $tfile3
+				echo "=================" >> $tfile3
+				cat $tfile2 >> $tfile3
+			fi	
+		done
+		cat $tfile3
 		;;
 
 	#######################################################
