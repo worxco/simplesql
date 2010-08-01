@@ -183,10 +183,10 @@ case $mode in
 	# option so I can actually read the records            #
 	#                                                      #
 	# Required parameters:                                 #
-	#	host - what server are we on?                       #
-	#	user - what user do we use to access our DB         #
-	#	passwd - The password needed                        #
-	#	DBName - The database we need a dump of             #
+	#	host - what server are we on?                        #
+	#	user - what user do we use to access our DB          #
+	#	passwd - The password needed                         #
+	#	DBName - The database we need a dump of              #
 	########################################################
 	"dump" )  # Dump a copy of the database into $DBName.dump
 		echo "mysqldump --skip-extended-insert -h $host -u $user -p$passwd $DBName > $DBName.dump"
@@ -198,10 +198,10 @@ case $mode in
 	# structure.                                           #
 	#                                                      #
 	# Required parameters:                                 #
-	#	host - what server are we on?                       #
-	#	user - what user do we use to access our DB         #
-	#	passwd - The password needed                        #
-	#	DBName - The database we need a dump of             #
+	#	host - what server are we on?                        #
+	#	user - what user do we use to access our DB          #
+	#	passwd - The password needed                         #
+	#	DBName - The database we need a dump of              #
 	########################################################
 	"dumpmeta" )  # Dump a copy of the metadata about the database into $DBName.meta
 		echo "mysqldump --no-data -h $host -u $user -p$passwd $DBName > $DBName.meta"
@@ -212,10 +212,10 @@ case $mode in
 	# Show a list of a the tables in the Database  #
 	#                                              #
 	# Required parameters:                         #
-	#	host - what server are we on?               #
-	#	user - what user do we use to access our DB #
-	#	passwd - The password needed                #
-	#	DBName - The database we need a dump of     #
+	#	host - what server are we on?                #
+	#	user - what user do we use to access our DB  #
+	#	passwd - The password needed                 #
+	#	DBName - The database we need a dump of      #
 	################################################
 	"show" )  # Show a list of tables in the $DBName database
 		mysqlshow -h $host -u $user -p$passwd $DBName 
@@ -229,10 +229,10 @@ case $mode in
 	# WAY down....                                        #
 	#                                                     #
 	# Required parameters:                                #
-	#	host - what server are we on?                      #
-	#	user - what user do we use to access our DB        #
-	#	passwd - The password needed                       #
-	#	DBName - The database we need a dump of            #
+	#	host - what server are we on?                       #
+	#	user - what user do we use to access our DB         #
+	#	passwd - The password needed                        #
+	#	DBName - The database we need a dump of             #
 	#######################################################
 	"dumpdrupal" )  
 		mysql -h $host -u $user -p$passwd  $DBName -Bs -e "show tables" > $tempfile
@@ -257,11 +257,11 @@ case $mode in
 	# tables along with the sessions and watchdog.        #
 	#                                                     #
 	# Required parameters:                                #
-	#	host - what server are we on?                      #
-	#	user - what user do we use to access our DB        #
-	#	passwd - The password needed                       #
-	#	DBName - The database we need a dump of            #
-	#	findstr - The string you want to search for        #
+	#	host - what server are we on?                       #
+	#	user - what user do we use to access our DB         #
+	#	passwd - The password needed                        #
+	#	DBName - The database we need a dump of             #
+	#	findstr - The string you want to search for         #
 	#######################################################
 	"drupalfind" )  
 		echo "Running drupalfind -- Searching for $findstr"
@@ -297,11 +297,11 @@ case $mode in
 	# WAY down....                                        #
 	#                                                     #
 	# Required parameters:                                #
-	#	host - what server are we on?                      #
-	#	user - what user do we use to access our 'New' DB  #
-	#	passwd - The password needed for the 'New' DB      #
-	#	DBName - The database we have a dump of            #
-	#	DBNameNew - The database we are restoring to       #
+	#	host - what server are we on?                       #
+	#	user - what user do we use to access our 'New' DB   #
+	#	passwd - The password needed for the 'New' DB       #
+	#	DBName - The database we have a dump of             #
+	#	DBNameNew - The database we are restoring to        #
 	#######################################################
 	"import" )	#Import from the .dump file into a database
 		echo Importing into $DBNameNew 
@@ -315,13 +315,20 @@ case $mode in
 	# both databases. Both Databases must ALREADY exist.  #
 	#                                                     #
 	# Required parameters:                                #
-	#	host - what server are we on?                      #
-	#	user - what user do we use to access both DB's     #
-	#	passwd - The password needed for both DB's         #
-	#	DBName - The source database                       #
-	#	DBNameNew - The destination database               #
+	#	host - what server are we on?                       #
+	#	user - what user do we use to access both DB's      #
+	#	passwd - The password needed for both DB's          #
+	#	DBName - The source database                        #
+	#	DBNameNew - The destination database                #
 	#######################################################
 	"copy" )			# Make a copy of a database into an existing one.
+		echo "Clearing destination database of all tables"
+		mysql -h $host -u $user -p$passwd  $DBNameNew -Bs -e "show tables" > $tempfile
+		for t in `cat $tempfile`; do
+			set +o errexit
+			mysql -h $host -u $user -p$passwd $DBNameNew -Bs -e "drop table $t"
+			set -o errexit
+		done
 		echo "Dumpfile file to $tempfile"
 		mysqldump -h $host -u $user -p$passwd $DBName > $tempfile
 		echo "Importing $tempfile to $DBNameNew"
@@ -334,13 +341,13 @@ case $mode in
 	# then CREATE a NEW database to restore the backup    #
 	# to. Again, the hosts, user, & password must be the  #
 	# same for both databases.                            #
-   #                                                     #
+  #                                                     #
 	# Required parameters:                                #
-	#	host - what server are we on?                      #
-	#	user - what user do we use to access both DB's     #
-	#	passwd - The password needed for both DB's         #
-	#	DBName - The source database                       #
-	#	DBNameNew - The destination database               #
+	#	host - what server are we on?                       #
+	#	user - what user do we use to access both DB's      #
+	#	passwd - The password needed for both DB's          #
+	#	DBName - The source database                        #
+	#	DBNameNew - The destination database                #
 	#######################################################
 	"clone" ) 		# Make a clone of a database into a new one.
 		echo "Dumpfile file to $tempfile"
@@ -362,12 +369,12 @@ EOF
 	# run. It is run agains the database. If you want to  #
 	# string multiple command together, use ';' between   #
 	# each command.                                       #
-   #                                                     #
+  #                                                     #
 	# Required parameters:                                #
-	#	host - what server are we on?                      #
-	#	user - what user do we use to access both DB's     #
-	#	passwd - The password needed for both DB's         #
-	#	DBName - The source database                       #
+	#	host - what server are we on?                       #
+	#	user - what user do we use to access both DB's      #
+	#	passwd - The password needed for both DB's          #
+	#	DBName - The source database                        #
 	#######################################################
 	"run" )			# Run a quote enclosed script against a database
 		cat <<EOF > $tempfile
@@ -381,13 +388,13 @@ EOF
 	# This will allow for an arbitrary set of mysql       #
 	# commands to be run. Build a file with each command  #
 	# on a separate line. Terminate each line with ';'    #
-   #                                                     #
+  #                                                     #
 	# Required parameters:                                #
-	#	host - what server are we on?                      #
-	#	user - what user do we use to access both DB's     #
-	#	passwd - The password needed for both DB's         #
-	#	DBName - The source database                       #
-	#	filename - The name of the script file             #
+	#	host - what server are we on?                       #
+	#	user - what user do we use to access both DB's      #
+	#	passwd - The password needed for both DB's          #
+	#	DBName - The source database                        #
+	#	filename - The name of the script file              #
 	#######################################################
 	"runfile" )		# Run a script file against a database
 		echo Running script on $DBName
@@ -397,12 +404,12 @@ EOF
 	#######################################################
 	# This provides you with Command Line Interface into  #
 	# mysql.                                              #
-   #                                                     #
+  #                                                     #
 	# Required parameters:                                #
-	#	host - what server are we on?                      #
-	#	user - what user do we use to access both DB's     #
-	#	passwd - The password needed for both DB's         #
-	#	DBName - The source database                       #
+	#	host - what server are we on?                       #
+	#	user - what user do we use to access both DB's      #
+	#	passwd - The password needed for both DB's          #
+	#	DBName - The source database                        #
 	#######################################################
 	"edit" )	# Go into raw mysql mode on a database
 		# echo "Host: $host - User: $user - Password: $passwd - DB: $DBName"
@@ -412,14 +419,14 @@ EOF
 
 	#######################################################
 	# Export a table in the database in a CSV format.     #
-   #                                                     #
+  #                                                     #
 	# Required parameters:                                #
-	#	host - what server are we on?                      #
-	#	user - what user do we use to access both DB's     #
-	#	passwd - The password needed for both DB's         #
-	#	DBName - The source database                       #
-	#	table - The source tablename                       #
-	#	xport - The name of the output file in CSV format  #
+	#	host - what server are we on?                       #
+	#	user - what user do we use to access both DB's      #
+	#	passwd - The password needed for both DB's          #
+	#	DBName - The source database                        #
+	#	table - The source tablename                        #
+	#	xport - The name of the output file in CSV format   #
 	#######################################################
 	"export" ) #Export into CSV format
 		#SELECT * INTO OUTFILE '/somefile.csv' 
@@ -443,15 +450,15 @@ EOF
 
 	#######################################################
 	# Provide a 'top' like statistics for your mysql      #
-   # server.                                             #
-   #                                                     #
+  # server.                                             #
+  #                                                     #
 	# Required parameters:                                #
-	#	host - what server are we on?                      #
-	#	user - what user do we use to access both DB's     #
-	#	passwd - The password needed for both DB's         #
-   #                                                     #
-   # You must have the mytop package installed for this  #
-   # to work.                                            #
+	#	host - what server are we on?                       #
+	#	user - what user do we use to access both DB's      #
+	#	passwd - The password needed for both DB's          #
+  #                                                     #
+  # You must have the mytop package installed for this  #
+  # to work.                                            #
 	#######################################################
 	"stats" )
 		set +o errexit
@@ -479,15 +486,15 @@ EOF
 
 	#######################################################
 	# Alters ALL admin password within all drupal DBs     #
-   # on a specified server. You must provide the old     #
+  # on a specified server. You must provide the old     #
 	# and new admin passwords. If the old password does   #
 	# not match what is currently in the database, it is  #
 	# assumed that the password is NOT TO BE CHANGED.     #
-   #                                                     #
+  #                                                     #
 	# Required parameters:                                #
-	#	host - what server are we on?                      #
-	#	user - what user do we use to access both DB's     #
-	#	passwd - The password needed for both DB's         #
+	#	host - what server are we on?                       #
+	#	user - what user do we use to access both DB's      #
+	#	passwd - The password needed for both DB's          #
 	#  DrupO - The current drupal admin (user 1) password #
 	#  DrupN - The new drupal admin (user 1) password     #
 	#######################################################
