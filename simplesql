@@ -57,9 +57,21 @@ set -o nounset
 [ -f ~/bin/simplesql.conf ] && source ~/bin/simplesql.conf
 [ -f simplesql.conf ] && source simplesql.conf
 
-tempfile=`tempfile`
-tfile2=`tempfile`
-tfile3=`tempfile`
+OS=`uname -s`
+case $OS in
+	'Darwin')
+		mktemp="/usr/bin/mktemp /tmp/simplesql.XXXXXXXX"
+		;;
+
+	* )
+		mktemp="/bin/mktemp /tmp/simplesql.XXXXXXXX"
+		;;
+
+esac
+
+tempfile=`$mktemp`
+tfile2=`$mktemp`
+tfile3=`$mktemp`
 
 ##########################################################
 # Create the Usage variable to display if they need help #
@@ -452,7 +464,7 @@ EOF
 	"edit" )	# Go into raw mysql mode on a database
 		# echo "Host: $host - User: $user - Password: $passwd - DB: $DBName"
 	   echo "SQL CLI on $host for User $user using Password $passwd in DB $DBName"
-		mysql -h $host -u $user -p$passwd $DBName
+		mysql -h $host -u${user} -p${passwd} $DBName
 		;;
 
 	#######################################################
